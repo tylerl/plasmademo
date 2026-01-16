@@ -37,5 +37,8 @@ Press `Q` or `ESC` to exit.
 
 ## Performance
 
-* Significantly faster on Linux!  (~30fps)
-* Windows terminal emulation kinda sucks! (~10fps)
+* FPS capped at ~60 because content doesnt change faster!
+  * Tweak your constants to waste your afternoon!
+* Significantly faster on Linux!  (~120fps or more)
+* New Windows (wt.exe) is pretty decent!  (~60fps)
+* Old Windows (conhost.exe) is still gawdawful!  (~10fps)

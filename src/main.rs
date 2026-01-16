@@ -8,14 +8,24 @@ use rand::Rng;
 use std::io::{stdout, Write, Result};
 use std::time::{Duration, Instant};
 
+// Adjust to your heart's content
+const TARGET_FPS: u64 = 60;
+const TARGET_FRAME_TIME: Duration = Duration::from_nanos(1_000_000_000 / TARGET_FPS);
+const FPS_AVG_SAMPLES: usize = 20;
+const ANIMATION_SPEED: f32 = 5.0;
+
 fn main() -> Result<()> {
     let mut stdout = stdout();
     terminal::enable_raw_mode()?;
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
 
     let (width, height) = terminal::size()?;
-    let (mut frame, start_time, mut last_frame, mut fps) =
-        (0.0f32, Instant::now(), Instant::now(), 0.0f32);
+    let start_time = Instant::now();
+
+    let mut frame = 0.0f32;
+    let mut this_frame = Instant::now();
+    let mut last_frame = TARGET_FRAME_TIME;
+    let mut frame_times: Vec<f32> = Vec::with_capacity(FPS_AVG_SAMPLES);
 
     let mut rng = rand::thread_rng();
     let (f1, f2, f3) = (
@@ -31,7 +41,18 @@ fn main() -> Result<()> {
     );
     let phase = rng.gen_range(0.0..6.28);
 
+    let mut xma = TARGET_FRAME_TIME.as_secs_f32();
+
     loop {
+        if frame_times.len() == FPS_AVG_SAMPLES {
+            frame_times.remove(0);
+        }
+        frame_times.push(last_frame.as_secs_f32());
+        let avg_frame_time = {
+            frame_times.iter().sum::<f32>() / frame_times.len() as f32
+        };
+        xma = xma * 0.99 + last_frame.as_secs_f32() * 0.01;
+
         if event::poll(Duration::from_millis(0))? {
             if let Event::Key(key) = event::read()? {
                 if matches!(key.code, KeyCode::Char('q') | KeyCode::Esc) {
@@ -70,7 +91,7 @@ fn main() -> Result<()> {
 
         let info = format!(
             " PLASMA WAVE | FPS: {:.1} | Time: {:.1}s | Press Q to exit ",
-            fps,
+            avg_frame_time.recip(),
             start_time.elapsed().as_secs_f32()
         );
         queue!(
@@ -80,10 +101,20 @@ fn main() -> Result<()> {
         )?;
         stdout.flush()?;
 
-        fps = 1.0 / last_frame.elapsed().as_secs_f32();
-        last_frame = Instant::now();
-        frame += 0.05;
-        std::thread::sleep(Duration::from_millis(16));
+
+        // Measure this frame's time and adjust sleep to hit target
+        let render_time = this_frame.elapsed();
+        let target_time = TARGET_FRAME_TIME.as_secs_f32();
+        let error = xma - target_time;
+        let adjusted_sleep = target_time - render_time.as_secs_f32() - error;
+
+        if adjusted_sleep > 0.0 {
+            std::thread::sleep(Duration::from_secs_f32(adjusted_sleep));
+        }
+
+        frame += last_frame.as_secs_f32() * ANIMATION_SPEED;
+        last_frame = this_frame.elapsed();
+        this_frame = Instant::now();
     }
 
     execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen)?;
